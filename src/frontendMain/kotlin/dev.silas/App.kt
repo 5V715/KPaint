@@ -13,25 +13,22 @@ import pl.treksoft.kvision.html.canvas
 import pl.treksoft.kvision.panel.root
 import pl.treksoft.kvision.startApplication
 import kotlin.browser.window
+import kotlin.random.Random
 
 class App : Application() {
 
     data class CurrentState(
-        var color: String,
-        var x: Double,
-        var y: Double,
-        var drawWidth: Double
+        val identity: Double = Random.nextDouble(),
+        var color: String = "black",
+        var x: Double = 0.0,
+        var y: Double = 0.0,
+        var drawWidth: Double = 2.0
     )
 
     override fun start() {
         root("kvapp") {
 
-            val current = CurrentState(
-                "black",
-                0.0,
-                0.0,
-                2.0
-            )
+            val current = CurrentState()
 
             canvas(window.innerWidth, window.innerHeight) {
 
@@ -41,22 +38,24 @@ class App : Application() {
                     drawCommand: DrawCommand,
                     emit: Boolean = false
                 ) {
-                        with(context2D) {
-                            beginPath()
-                            moveTo(drawCommand.x0, drawCommand.y0)
-                            lineTo(drawCommand.x1, drawCommand.y1)
-                            strokeStyle = drawCommand.color
-                            lineWidth = drawCommand.drawWidth
-                            stroke()
-                            closePath()
-                        }
+                    console.log(drawCommand)
+                    with(context2D) {
+                        beginPath()
+                        moveTo(drawCommand.x0, drawCommand.y0)
+                        lineTo(drawCommand.x1, drawCommand.y1)
+                        strokeStyle = drawCommand.color
+                        lineWidth = drawCommand.drawWidth
+                        stroke()
+                        closePath()
+                    }
                     when (emit) {
                         false -> return
                         else -> {
-                            val w = canvasWidth!!.toDouble()
-                            val h = canvasWidth!!.toDouble()
+                            val w = canvasWidth!!
+                            val h = canvasWidth!!
                             val outDrawCommand = DrawCommand(
                                 null,
+                                current.identity,
                                 drawCommand.x0 / w,
                                 drawCommand.y0 / h,
                                 drawCommand.x1 / w,
@@ -72,9 +71,25 @@ class App : Application() {
 
                 Model.drawCommands.onUpdate.add {
                     GlobalScope.launch {
+                        val w = canvasWidth!!
+                        val h = canvasHeight!!
                         it.forEach { command ->
-                            console.log(command)
-                            drawLine(command, false)
+                            when (current.identity) {
+                                command.identity -> Unit
+                                else -> {
+                                    val inCommand = command.copy(
+                                        x0 = command.x0 * w,
+                                        y0 = command.y0 * h,
+                                        x1 = command.x1 * w,
+                                        y1 = command.y1 * h
+                                    )
+                                    console.log("receive: ", inCommand)
+                                    drawLine(
+                                        inCommand,
+                                        false
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -99,10 +114,11 @@ class App : Application() {
                             drawLine(
                                 DrawCommand(
                                     null,
+                                    current.identity,
                                     current.x,
                                     current.y,
                                     mouseEvent.clientX.toDouble(),
-                                    mouseEvent.clientX.toDouble(),
+                                    mouseEvent.clientY.toDouble(),
                                     current.color,
                                     current.drawWidth
                                 ),
@@ -116,11 +132,11 @@ class App : Application() {
                     when (!drawing) {
                         true -> return
                         else -> {
-                            console.log(touchEvent)
                             drawing = false
                             drawLine(
                                 DrawCommand(
                                     null,
+                                    current.identity,
                                     current.x,
                                     current.y,
                                     touchEvent.touches[0]!!.clientX.toDouble(),
@@ -136,13 +152,12 @@ class App : Application() {
 
                 fun mouseMove(mouseEvent: MouseEvent) {
                     when (!drawing) {
-                        true -> {
-                            return
-                        }
+                        true -> return
                         else -> {
                             drawLine(
                                 DrawCommand(
                                     null,
+                                    current.identity,
                                     current.x,
                                     current.y,
                                     mouseEvent.clientX.toDouble(),
@@ -160,13 +175,13 @@ class App : Application() {
 
                 fun touchMove(touchEvent: TouchEvent) {
                     when (!drawing) {
-                        true -> {
-                            return
-                        }
+                        true -> return
+
                         else -> {
                             drawLine(
                                 DrawCommand(
                                     null,
+                                    current.identity,
                                     current.x,
                                     current.y,
                                     touchEvent.touches[0]!!.clientX.toDouble(),
@@ -199,6 +214,7 @@ class App : Application() {
 
     private fun send(drawCommand: DrawCommand) =
         GlobalScope.launch {
+            console.log("send:", drawCommand)
             drawChannel.send(drawCommand)
         }
 }

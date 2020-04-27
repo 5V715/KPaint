@@ -11,6 +11,7 @@ import pl.treksoft.kvision.types.LocalDateTime
 @Serializable
 data class DrawCommand(
     val date: LocalDateTime?,
+    val identity: Double,
     val x0: Double,
     val y0: Double,
     val x1: Double,
