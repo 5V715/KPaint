@@ -6,7 +6,6 @@ import kotlinx.coroutines.channels.SendChannel
 import org.springframework.beans.factory.config.ConfigurableBeanFactory
 import org.springframework.context.annotation.Scope
 import org.springframework.stereotype.Service
-import java.time.LocalDateTime
 import java.util.concurrent.ConcurrentHashMap
 
 object Model {
@@ -19,7 +18,7 @@ actual class DrawService : IDrawService {
     override suspend fun socketConnection(input: ReceiveChannel<DrawCommand>, output: SendChannel<DrawCommand>) {
         clients.add(output)
         for (receivedCommands in input) {
-            val tweet = receivedCommands.copy(date = LocalDateTime.now())
+            val tweet = receivedCommands.copy()
             clients.forEach {
                 it.send(tweet)
             }

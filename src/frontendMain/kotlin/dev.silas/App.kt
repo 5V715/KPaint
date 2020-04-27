@@ -4,89 +4,203 @@ import dev.silas.Model.connectToServer
 import dev.silas.Model.drawChannel
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
-import org.w3c.dom.events.KeyboardEvent
+import org.w3c.dom.TouchEvent
+import org.w3c.dom.events.MouseEvent
+import org.w3c.dom.get
 import pl.treksoft.kvision.Application
 import pl.treksoft.kvision.core.onEvent
-import pl.treksoft.kvision.form.text.Text
-import pl.treksoft.kvision.form.text.text
-import pl.treksoft.kvision.form.text.textAreaInput
-import pl.treksoft.kvision.html.button
 import pl.treksoft.kvision.html.canvas
-import pl.treksoft.kvision.panel.FlexAlignItems
-import pl.treksoft.kvision.panel.FlexJustify
-import pl.treksoft.kvision.panel.hPanel
 import pl.treksoft.kvision.panel.root
-import pl.treksoft.kvision.panel.vPanel
 import pl.treksoft.kvision.startApplication
-import pl.treksoft.kvision.utils.ENTER_KEY
-import pl.treksoft.kvision.utils.perc
-import pl.treksoft.kvision.utils.px
+import kotlin.browser.window
 
 class App : Application() {
 
+    data class CurrentState(
+        var color: String,
+        var x: Double,
+        var y: Double,
+        var drawWidth: Double
+    )
+
     override fun start() {
         root("kvapp") {
-            vPanel(FlexJustify.CENTER, FlexAlignItems.CENTER, spacing = 5) {
-                margin = 10.px
-                width = 100.perc
-                val nickname = text(value = "Guest", label = "Nickname") {
-                    width = 500.px
-                }
-                val tags = Text(label = "#")
-                tags.width = 500.px
-                hPanel(justify = FlexJustify.SPACEBETWEEN) {
-                    width = 500.px
-                    val tweet = textAreaInput {
-                        width = 425.px
-                        height = 120.px
-                    }
 
-                    val button = button("Post") {
-                        width = 70.px
-                        height = 100.perc
-                    }
+            val current = CurrentState(
+                "black",
+                0.0,
+                0.0,
+                2.0
+            )
 
-                    fun post() {
-                        GlobalScope.launch {
-                            val tagList = tags.value?.let {
-                                it.split(" ").map { it.replace("#", "").replace(",", "").trim() }
-                                    .filter { it.isNotBlank() }
-                            } ?: listOf()
-                            nickname.value?.let { n ->
-                                tweet.value?.let { v ->
-                                    drawChannel.send(DrawCommand(null, n, v, tagList))
-                                    tweet.value = null
-                                    tags.value = null
-                                    tweet.focus()
-                                }
-                            }
+            canvas(window.innerWidth, window.innerHeight) {
+
+                var drawing = false
+
+                fun drawLine(
+                    drawCommand: DrawCommand,
+                    emit: Boolean = false
+                ) {
+                        with(context2D) {
+                            beginPath()
+                            moveTo(drawCommand.x0, drawCommand.y0)
+                            lineTo(drawCommand.x1, drawCommand.y1)
+                            strokeStyle = drawCommand.color
+                            lineWidth = drawCommand.drawWidth
+                            stroke()
+                            closePath()
+                        }
+                    when (emit) {
+                        false -> return
+                        else -> {
+                            val w = canvasWidth!!.toDouble()
+                            val h = canvasWidth!!.toDouble()
+                            val outDrawCommand = DrawCommand(
+                                null,
+                                drawCommand.x0 / w,
+                                drawCommand.y0 / h,
+                                drawCommand.x1 / w,
+                                drawCommand.y1 / h,
+                                drawCommand.color,
+                                drawCommand.drawWidth
+                            )
+                            console.log(outDrawCommand)
+                            send(outDrawCommand)
                         }
                     }
+                }
 
-                    fun keyDownHandler(ev: KeyboardEvent) {
-                        if (ev.ctrlKey && ev.keyCode == ENTER_KEY) {
-                            post()
+                Model.drawCommands.onUpdate.add {
+                    GlobalScope.launch {
+                        it.forEach { command ->
+                            console.log(command)
+                            drawLine(command, false)
                         }
                     }
-
-                    tweet.onEvent {
-                        keydown = ::keyDownHandler
-                    }
-
-                    tags.onEvent {
-                        keydown = ::keyDownHandler
-                    }
-
-                    button.onClick {
-                        post()
-                    }
-
                 }
-                add(tags)
+
+                fun mouseDown(event: MouseEvent) {
+                    drawing = true
+                    current.x = event.clientX.toDouble()
+                    current.y = event.clientY.toDouble()
+                }
+
+                fun touchDown(event: TouchEvent) {
+                    drawing = true
+                    current.x = event.touches[0]!!.clientX.toDouble()
+                    current.y = event.touches[0]!!.clientY.toDouble()
+                }
+
+                fun mouseUp(mouseEvent: MouseEvent) {
+                    when (!drawing) {
+                        true -> return
+                        else -> {
+                            drawing = false
+                            drawLine(
+                                DrawCommand(
+                                    null,
+                                    current.x,
+                                    current.y,
+                                    mouseEvent.clientX.toDouble(),
+                                    mouseEvent.clientX.toDouble(),
+                                    current.color,
+                                    current.drawWidth
+                                ),
+                                true
+                            )
+                        }
+                    }
+                }
+
+                fun touchEnd(touchEvent: TouchEvent) {
+                    when (!drawing) {
+                        true -> return
+                        else -> {
+                            console.log(touchEvent)
+                            drawing = false
+                            drawLine(
+                                DrawCommand(
+                                    null,
+                                    current.x,
+                                    current.y,
+                                    touchEvent.touches[0]!!.clientX.toDouble(),
+                                    touchEvent.touches[0]!!.clientY.toDouble(),
+                                    current.color,
+                                    current.drawWidth
+                                ),
+                                true
+                            )
+                        }
+                    }
+                }
+
+                fun mouseMove(mouseEvent: MouseEvent) {
+                    when (!drawing) {
+                        true -> {
+                            return
+                        }
+                        else -> {
+                            drawLine(
+                                DrawCommand(
+                                    null,
+                                    current.x,
+                                    current.y,
+                                    mouseEvent.clientX.toDouble(),
+                                    mouseEvent.clientY.toDouble(),
+                                    current.color,
+                                    2.0
+                                ),
+                                true
+                            )
+                            current.x = mouseEvent.clientX.toDouble()
+                            current.y = mouseEvent.clientY.toDouble()
+                        }
+                    }
+                }
+
+                fun touchMove(touchEvent: TouchEvent) {
+                    when (!drawing) {
+                        true -> {
+                            return
+                        }
+                        else -> {
+                            drawLine(
+                                DrawCommand(
+                                    null,
+                                    current.x,
+                                    current.y,
+                                    touchEvent.touches[0]!!.clientX.toDouble(),
+                                    touchEvent.touches[0]!!.clientY.toDouble(),
+                                    current.color,
+                                    2.0
+                                )
+                            )
+                            current.x = touchEvent.touches[0]!!.clientX.toDouble()
+                            current.y = touchEvent.touches[0]!!.clientY.toDouble()
+                        }
+                    }
+                }
+
+                onEvent {
+                    mousedown = ::mouseDown
+                    mouseup = ::mouseUp
+                    mouseout = ::mouseUp
+                    mousemove = ::mouseMove
+
+                    touchstart = ::touchDown
+                    touchend = ::touchEnd
+                    touchcancel = ::touchEnd
+                    touchmove = ::touchMove
+                }
             }
         }
         connectToServer()
     }
+
+    private fun send(drawCommand: DrawCommand) =
+        GlobalScope.launch {
+            drawChannel.send(drawCommand)
+        }
 }
 
 fun main() {
